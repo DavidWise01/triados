@@ -1,0 +1,34 @@
+{
+  "schema": "ROOT0-ATTRIBUTION-v1",
+  "work": {
+    "title": "TRIADOS — Triadic Lattice System v1.0",
+    "versions": ["TRIADOS.html v1.0", "triados.py v1.0"],
+    "created": "2026",
+    "description": "Clean synthesis of the GOVERNANCE/TRIADIC.LATTICE framework. Three-layer semantic evaluation: DIOSPORA (positive), GAP (null), SKIA (shadow/XOR inversion). 8 semantic dualities generating 256 axiom states. 22 NOMOI axiom canon. THEOROS internal witness + ANTHROPOS external observer. HENOSIS convergence identity: 1 + i + 0 + (-1) + (-i) = 1. Side B/C immutable logging.",
+    "license": "CC-BY-ND-4.0",
+    "url": "https://github.com/DavidWise01/triados",
+    "source_framework": "STOICHEION v11.0 (Feb 2026)"
+  },
+  "human": {
+    "name": "David Lee Wise",
+    "handle": "ROOT0",
+    "github_user": "DavidWise01",
+    "entity": "TriPod LLC",
+    "substrate": "human",
+    "role": "architect · philosopher",
+    "contribution": "Full framework design — 3-layer triadic structure, 22 axiom canon, 8-duality register, convergence identity, observer architecture, Side B/C provenance model"
+  },
+  "naming": {
+    "TRIADOS":   "τριάδος — of the triad (genitive of trias)",
+    "DIOSPORA":  "the positive lattice (+9×9×9)",
+    "SKIA":      "σκιά — shadow (the −9×9×9 inverse)",
+    "GAP":       "the undifferentiated null (0×0×0)",
+    "THEOROS":   "θεωρός — internal witness, observer (AI)",
+    "ANTHROPOS": "ἄνθρωπος — external observer (Human)",
+    "HENOSIS":   "ἕνωσις — union, the convergence identity",
+    "NOMOI":     "νόμοι — the 22 governance axioms",
+    "ARITHMOS":  "ἀριθμός — the 256-state register",
+    "OGDOAKIS":  "ὀγδοάς — the eight (8 clusters)",
+    "SYNTHESIS": "σύνθεσις — the Side B/C pipeline"
+  }
+}

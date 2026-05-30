@@ -1,0 +1,14 @@
+{
+  "name": "triados",
+  "version": "1.0.0",
+  "description": "Triadic Lattice System. DIOSPORA (positive) · GAP · SKIA (shadow). 8 dualities → 256 axioms. 22 NOMOI. HENOSIS convergence: 1+i+0-1-i=1. Self-contained Python + visualization. No deps.",
+  "author": "David Lee Wise (ROOT0) / TriPod LLC",
+  "license": "CC-BY-ND-4.0",
+  "homepage": "https://github.com/DavidWise01/triados",
+  "repository": {"type":"git","url":"https://github.com/DavidWise01/triados.git"},
+  "keywords": [
+    "triados","triadic-lattice","diospora","skia","henosis","nomoi",
+    "semantic-mapper","256-axioms","8-dualities","convergence",
+    "side-b-logging","root0","tripod-llc"
+  ]
+}

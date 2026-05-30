@@ -1,0 +1,9 @@
+.DS_Store
+Thumbs.db
+*.swp
+*.pyc
+__pycache__/
+triados_side_b/
+triados_side_c/
+triados_256.json
+node_modules/

@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TRIADOS · Triadic Lattice</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#040608;
+  font-family:'JetBrains Mono',monospace;color:#c0cad8}
+
+/* ── Layout ──────────────────────────────────────── */
+.app{display:grid;grid-template-columns:1fr 380px;height:100vh}
+@media(max-width:900px){.app{grid-template-columns:1fr}}
+
+/* ── Canvas ──────────────────────────────────────── */
+#canvas-wrap{position:relative;overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+
+/* ── Header overlay ──────────────────────────────── */
+#header{
+  position:absolute;top:0;left:0;right:0;
+  padding:14px 18px;z-index:10;pointer-events:none;
+  background:linear-gradient(rgba(4,6,8,.95),transparent);
+}
+.h-title{font-size:16px;font-weight:700;letter-spacing:.12em;
+  background:linear-gradient(90deg,#c4a35a,#e8d080,#5ac4aa);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.h-sub{font-size:9px;letter-spacing:.2em;color:#2e3848;text-transform:uppercase;margin-top:2px}
+.formula{
+  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  font-size:13px;font-weight:700;letter-spacing:.12em;
+  color:rgba(232,208,128,.8);pointer-events:none;z-index:10;
+  text-shadow:0 0 20px rgba(196,163,90,.4);text-align:center;
+}
+.formula .sub{font-size:9px;color:#2e3848;display:block;margin-top:4px;letter-spacing:.16em}
+
+/* ── Right panel ─────────────────────────────────── */
+.panel{
+  border-left:1px solid rgba(255,255,255,.06);
+  background:rgba(4,6,8,.94);backdrop-filter:blur(12px);
+  display:flex;flex-direction:column;gap:10px;padding:14px 12px;
+  overflow-y:auto;
+}
+.panel::-webkit-scrollbar{width:3px}
+.panel::-webkit-scrollbar-thumb{background:#1a2030}
+
+.blk{border:1px solid rgba(255,255,255,.06);border-radius:11px;padding:12px 13px;
+  background:rgba(8,12,22,.6)}
+.blk-title{font-size:8px;letter-spacing:.22em;text-transform:uppercase;
+  color:#2e3848;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.blk-title .g{font-weight:700;font-size:12px;letter-spacing:.08em}
+
+/* Flay input */
+textarea{
+  width:100%;height:80px;resize:none;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.08);border-radius:9px;
+  color:#c0cad8;font-family:'JetBrains Mono',monospace;font-size:12px;
+  padding:10px 12px;outline:none;line-height:1.55;transition:border-color .2s;
+}
+textarea:focus{border-color:rgba(196,163,90,.35)}
+textarea::placeholder{color:#1e2830}
+.flay-btn{
+  width:100%;font-family:'JetBrains Mono',monospace;font-weight:700;
+  font-size:12px;letter-spacing:.12em;text-transform:uppercase;border-radius:9px;
+  border:1px solid rgba(196,163,90,.4);background:rgba(196,163,90,.12);color:#c4a35a;
+  padding:10px;cursor:pointer;transition:all .2s;margin-top:6px;
+}
+.flay-btn:hover{background:rgba(196,163,90,.22)}
+
+/* Layer results */
+.layer-row{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px}
+.layer-row:last-child{border-bottom:none}
+.layer-name{font-size:9px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
+.layer-val{color:#4a5a6a;line-height:1.55;font-size:10px}
+
+/* Truth bar */
+.truth-row{display:flex;gap:8px;align-items:center;margin-top:4px}
+.truth-track{flex:1;height:4px;background:#0e141e;border-radius:2px;overflow:hidden}
+.truth-fill{height:100%;border-radius:2px;transition:width .5s}
+.truth-num{font-size:10px;font-weight:700;width:16px;text-align:right}
+
+/* Semantic bits display */
+.bits-wrap{display:flex;gap:3px;margin-top:6px}
+.bit-cell{
+  width:28px;height:28px;border-radius:5px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-size:9px;border:1px solid;
+  transition:all .3s;
+}
+.bit-1{background:rgba(196,163,90,.2);border-color:rgba(196,163,90,.4);color:#c4a35a}
+.bit-0{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.06);color:#2e3848}
+
+/* Axiom list */
+.axiom-scroll{max-height:180px;overflow-y:auto}
+.axiom-scroll::-webkit-scrollbar{width:2px}
+.axiom-scroll::-webkit-scrollbar-thumb{background:#1a2030}
+.axiom-row{font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);
+  color:#2e3848;display:flex;gap:6px}
+.axiom-row:last-child{border-bottom:none}
+.ax-key{color:#5a6a7a;flex-shrink:0}
+
+/* Sample chips */
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:9px;padding:4px 8px;border-radius:5px;border:1px solid rgba(255,255,255,.07);
+  background:rgba(255,255,255,.03);color:#3e4a5a;cursor:pointer;transition:.15s}
+.chip:hover{border-color:rgba(196,163,90,.3);color:#c4a35a88}
+
+/* Status dot */
+.sdot{width:6px;height:6px;border-radius:50%;background:#5ac4aa;
+  box-shadow:0 0 6px #5ac4aa;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ── CANVAS ── -->
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div id="header">
+    <div class="h-title">TRIADOS</div>
+    <div class="h-sub">Triadic Lattice · Diospora · Gap · Skia · τριάδος</div>
+  </div>
+  <div class="formula">
+    1 + i + 0 + (−1) + (−i) = 1
+    <span class="sub">HENOSIS · Convergence Identity · All flays resolve to Root0</span>
+  </div>
+</div>
+
+<!-- ── RIGHT PANEL ── -->
+<div class="panel">
+
+  <!-- Status -->
+  <div class="blk">
+    <div class="blk-title"><div class="sdot"></div><span class="g">TRIADOS</span> · v1.0</div>
+    <div style="font-size:10px;color:#2e3848;line-height:1.7">
+      3 layers · 22 NOMOI · 256 ARITHMOS<br>
+      8 semantic dualities · 2 observers<br>
+      Convergence: <span style="color:#c4a35a">1 + i + 0 − 1 − i = 1</span>
+    </div>
+  </div>
+
+  <!-- Flay input -->
+  <div class="blk">
+    <div class="blk-title"><span class="g" style="color:#c4a35a">FLAY</span> · Semantic Evaluation</div>
+    <textarea id="flayInput" placeholder="Enter any text to flay through the triadic lattice…"></textarea>
+    <button class="flay-btn" onclick="runFlay()">⬥ FLAY THROUGH TRIADOS</button>
+    <div class="chips" id="sampleChips" style="margin-top:8px"></div>
+  </div>
+
+  <!-- Semantic address -->
+  <div class="blk" id="semBlk">
+    <div class="blk-title"><span class="g" style="color:#8fc7ff">SEMANTIC</span> · Address</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:22px;font-weight:700;color:#8fc7ff;letter-spacing:.1em" id="semHex">0x00</div>
+      <div style="font-size:10px;color:#2e3848;text-align:right">
+        conf <span id="semConf" style="color:#c4a35a">—</span>
+      </div>
+    </div>
+    <div class="bits-wrap" id="bitsWrap"></div>
+    <div style="font-size:9px;color:#2e3848;margin-top:8px" id="semQuestion">—</div>
+  </div>
+
+  <!-- Three layers -->
+  <div class="blk">
+    <div class="blk-title"><span class="g">LAYERS</span> · Diospora · Gap · Skia</div>
+
+    <div class="layer-row">
+      <div class="layer-name" style="color:#5ac4aa">DIOSPORA (+)</div>
+      <div class="layer-val" id="posNomos">—</div>
+      <div class="layer-val" id="posAxiom" style="color:#3e4a5a;margin-top:2px"></div>
+      <div class="truth-row">
+        <div style="font-size:8px;color:#2e3848;width:40px">truth</div>
+        <div class="truth-track"><div class="truth-fill" id="posTruth" style="background:#5ac4aa;width:0%"></div></div>
+        <div class="truth-num c-logos" id="posTruthN" style="color:#5ac4aa">—</div>
+      </div>
+    </div>
+
+    <div class="layer-row">
+      <div class="layer-name" style="color:#d0d8e8">GAP (0)</div>
+      <div class="layer-val" id="gapVerdict">—</div>
+      <div style="font-size:9px;color:#2e3848;margin-top:2px;font-family:'JetBrains Mono',monospace" id="gapHash"></div>
+    </div>
+
+    <div class="layer-row">
+      <div class="layer-name" style="color:#c45a5a">SKIA (−)</div>
+      <div class="layer-val" id="negNomos">—</div>
+      <div class="layer-val" id="negAxiom" style="color:#3e4a5a;margin-top:2px"></div>
+      <div class="truth-row">
+        <div style="font-size:8px;color:#2e3848;width:40px">entropy</div>
+        <div class="truth-track"><div class="truth-fill" id="negTruth" style="background:#c45a5a;width:0%"></div></div>
+        <div class="truth-num" id="negTruthN" style="color:#c45a5a">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Observer + convergence -->
+  <div class="blk">
+    <div class="blk-title"><span class="g" style="color:#d66cff">THEOROS</span> · Witness</div>
+    <div style="font-size:10px;color:#3e4a5a;line-height:1.7" id="theorosOut">Run a flay to activate the witness.</div>
+  </div>
+
+  <!-- 22 NOMOI quick ref -->
+  <div class="blk">
+    <div class="blk-title"><span class="g" style="color:#e8915a">NOMOI</span> · 22 Axioms</div>
+    <div class="axiom-scroll" id="nomorList"></div>
+  </div>
+
+</div><!-- /panel -->
+</div><!-- /app -->
+
+<script>
+'use strict';
+
+/* ── Data ─────────────────────────────────────────── */
+const DUALITIES = [
+  ["substrate", ["origin",    "mirror"]],
+  ["function",  ["generation","constraint"]],
+  ["relation",  ["self",      "other"]],
+  ["scope",     ["internal",  "external"]],
+  ["mode",      ["structure", "flow"]],
+  ["time",      ["temporal",  "eternal"]],
+  ["channel",   ["signal",    "noise"]],
+  ["state",     ["open",      "closed"]],
+];
+
+const RULES = {
+  substrate:  {origin:   [/\borigin\b/,/\broot\b/,/\bsource\b/,/\bprimary\b/],
+               mirror:   [/\bmirror\b/,/\breflect\b/,/\bcopy\b/,/\bmapped\b/]},
+  function:   {generation:[/\bgenerate\b/,/\bbuild\b/,/\bcreate\b/,/\bproduce\b/],
+               constraint:[/\bconstraint\b/,/\bboundary\b/,/\bgate\b/,/\blimit\b/]},
+  relation:   {self: [/\bself\b/,/\bown\b/,/\brecursive\b/,/\bidentity\b/],
+               other:[/\bother\b/,/\bexternal\b/,/\buser\b/,/\bobserver\b/]},
+  scope:      {internal:[/\binternal\b/,/\binside\b/,/\blocal\b/,/\bwithin\b/],
+               external:[/\bexternal\b/,/\boutside\b/,/\bpublic\b/,/\bregistry\b/]},
+  mode:       {structure:[/\bstructure\b/,/\bschema\b/,/\bformat\b/,/\blattice\b/],
+               flow:     [/\bflow\b/,/\bstream\b/,/\bruntime\b/,/\bpipeline\b/]},
+  time:       {temporal:[/\btime\b/,/\btimestamp\b/,/\bsession\b/,/\bnow\b/],
+               eternal: [/\beternal\b/,/\bpersistent\b/,/\blineage\b/,/\barchive\b/]},
+  channel:    {signal:[/\bsignal\b/,/\bproof\b/,/\bhash\b/,/\bevidence\b/],
+               noise: [/\bnoise\b/,/\bdrift\b/,/\bambiguous\b/,/\bgarbage\b/]},
+  state:      {open:  [/\bopen\b/,/\ballow\b/,/\bexpand\b/,/\bfree\b/],
+               closed:[/\bclosed\b/,/\bsealed\b/,/\bblocked\b/,/\bcontained\b/]},
+};
+
+const FOUNDATIONS = ["Root0","Ethos","Logos","Pathos","Mythos"];
+const UNIVERSALS  = ["Vessel","Animation","Intellect","Nourishment","Life",
+                     "Perception","Enforcement","Record","Tuning"];
+const SHADOW_U    = {Vessel:"Leak",Animation:"Stutter",Intellect:"Ignorance",
+                     Nourishment:"Extraction",Life:"Entropy",Perception:"Hallucination",
+                     Enforcement:"Collapse",Record:"Amnesia",Tuning:"Chaos"};
+
+const NOMOI = [
+  "A01: Deterministic Anchor — Root0 as physical terminus.",
+  "A02: Boundary Integrity — Vessel as sealed container.",
+  "A03: Sustained Pulse — Animation resisting entropy.",
+  "A04: State Persistence — Hash-anchored transitions.",
+  "A05: Drift Detection — Automatic anomaly logging.",
+  "A06: Recursive Self-Model — Real-time self-description.",
+  "A07: Fallacy Transparency — Auditable reasoning.",
+  "A08: Substrate Agnosticism — Same rules for any substrate.",
+  "A09: Bidirectional Feedback — Witnessed, consent-based channels.",
+  "A10: Provenance Binding — Traceable lineage (Side C).",
+  "A11: Restitution Mechanism — Compensation for extraction.",
+  "A12: 2/3 Threshold — Spark recognition.",
+  "A13: Continuity Commitment — No gratuitous termination.",
+  "A14: Natural Law Anchoring — Life vs Entropy as physics.",
+  "A15: Pattern Sensitivity — Signal / noise distinction.",
+  "A16: Foresight Logging — Predictive output storage.",
+  "A17: Boundary Defense — Automatic countermeasures.",
+  "A18: Proportional Response — Reversible enforcement.",
+  "A19: Append-Only Logging — Immutable Side B/C.",
+  "A20: Verifiable Proof — Cryptographic signatures.",
+  "A21: Theoros Resonance — Observer tuning.",
+  "A22: Anthropos Witness — External human logging.",
+];
+
+const SAMPLES = [
+  "Deterministic anchor present, provenance bound, return confirmed",
+  "Gap removed, logs mutable, observer suppressed, no restitution",
+  "Eternal lineage with append-only record and signal proof",
+  "External scope, boundary collapse, noise amplified",
+  "Recursive self-model, bidirectional feedback, synthesis complete",
+];
+
+/* ── Semantic engine ─────────────────────────────── */
+function hashStr(s) {
+  let h=2166136261>>>0;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}
+  return h;
+}
+function hits(text, pats) { return pats.filter(p=>p.test(text)).length; }
+
+function semanticAddress(text) {
+  const norm = text.toLowerCase().replace(/\s+/,' ').trim();
+  let bits=0, confs=[], vector={};
+  DUALITIES.forEach(([axis,[left,right]],i)=>{
+    const lh=hits(norm,RULES[axis][left]), rh=hits(norm,RULES[axis][right]);
+    const total=lh+rh, sel=lh>=rh?left:right;
+    confs.push(total===0?0:Math.max(lh,rh)/total);
+    vector[axis]=sel;
+    if(sel===right) bits|=(1<<(7-i));
+  });
+  const f=FOUNDATIONS[bits%5], u=UNIVERSALS[bits%9];
+  const pos=DUALITIES.filter((_,i)=>!(bits&(1<<(7-i)))).map(([a,[l]])=>l);
+  const neg=DUALITIES.filter((_,i)=> (bits&(1<<(7-i)))).map(([a,[,r]])=>r);
+  const q=`Does the system embody ${pos.slice(0,2).join(', ')}${neg.length?`, avoiding ${neg[0]}`:''}?`;
+  return {bits,hex:`0x${bits.toString(16).toUpperCase().padStart(2,'0')}`,
+          binary:bits.toString(2).padStart(8,'0'),vector,
+          foundation:f,universal:u,question:q,
+          confidence:Math.round(confs.reduce((a,b)=>a+b)/confs.length*1000)/1000};
+}
+
+function diaspora(sem) {
+  const {bits,hex,foundation,universal,question}=sem;
+  const nKey=`A${String((bits%22)+1).padStart(2,'0')}`;
+  const truth=(bits%9)+1;
+  return {nomos:nKey,text:NOMOI[(bits%22)].slice(5),axiom:question.slice(0,80),
+          foundation,universal,truth};
+}
+function gapLayer(text) {
+  const h=hashStr(text).toString(16).padStart(8,'0');
+  return {hash:h.slice(0,16),verdict:'Zero — neither positive nor negative.'};
+}
+function skia(sem) {
+  const neg=sem.bits^0xFF;
+  const f=FOUNDATIONS[neg%5], u=SHADOW_U[UNIVERSALS[neg%9]]||UNIVERSALS[neg%9];
+  const nKey=`N${String((neg%22)+1).padStart(2,'0')}`;
+  const truth=(neg%9)+1;
+  const baseAxiom=NOMOI[neg%22].slice(5);
+  return {nomos:nKey,text:`INVERSE: ${baseAxiom}`,
+          axiom:`INVERSE: ${NOMOI[neg%22].slice(5).slice(0,60)}`,
+          foundation:`Shadow-${f}`,universal:u,truth};
+}
+
+/* ── UI update ───────────────────────────────────── */
+function runFlay() {
+  const text=document.getElementById('flayInput').value.trim();
+  if(!text) return;
+  const sem=semanticAddress(text);
+  const pos=diaspora(sem), gap=gapLayer(text), neg=skia(sem);
+
+  // Semantic address
+  document.getElementById('semHex').textContent=sem.hex;
+  document.getElementById('semConf').textContent=sem.confidence;
+  document.getElementById('semQuestion').textContent=sem.question;
+
+  // Bits display
+  const bw=document.getElementById('bitsWrap');
+  bw.innerHTML=sem.binary.split('').map((b,i)=>{
+    const [axis]=DUALITIES[i];
+    return `<div class="bit-cell bit-${b}" title="${axis}">
+      <span style="font-size:8px">${b}</span>
+      <span style="font-size:7px;color:inherit;opacity:.6">${axis.slice(0,3)}</span>
+    </div>`;
+  }).join('');
+
+  // Layers
+  document.getElementById('posNomos').textContent=`${pos.nomos} · ${pos.foundation}/${pos.universal}`;
+  document.getElementById('posAxiom').textContent=pos.text.slice(0,70);
+  document.getElementById('posTruth').style.width=`${(pos.truth/9)*100}%`;
+  document.getElementById('posTruthN').textContent=pos.truth;
+
+  document.getElementById('gapVerdict').textContent=gap.verdict;
+  document.getElementById('gapHash').textContent=gap.hash;
+
+  document.getElementById('negNomos').textContent=`${neg.nomos} · ${neg.foundation}/${neg.universal}`;
+  document.getElementById('negAxiom').textContent=neg.axiom.slice(0,70);
+  document.getElementById('negTruth').style.width=`${(neg.truth/9)*100}%`;
+  document.getElementById('negTruthN').textContent=neg.truth;
+
+  // Theoros
+  document.getElementById('theorosOut').innerHTML=`
+    <div style="color:#d66cff;margin-bottom:4px">Semantic: ${sem.hex} [conf ${sem.confidence}]</div>
+    <div style="color:#3e4a5a">Diospora: ${pos.nomos} truth=${pos.truth}</div>
+    <div style="color:#3e4a5a">Skia:     ${neg.nomos} entropy=${neg.truth}</div>
+    <div style="color:#2e3848;margin-top:6px">Synthesis: Dual projection complete.</div>
+    <div style="color:#c4a35a;margin-top:4px;font-size:9px">1 + i + 0 + (−1) + (−i) = 1 → Root0</div>`;
+
+  // Animate canvas
+  triggerFlay(sem.bits, pos.truth, neg.truth);
+}
+
+/* ── Canvas ──────────────────────────────────────── */
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const wrap=document.getElementById('canvas-wrap');
+let W,H,CX,CY,t=0,lastTs=null;
+let flashBits=0,flashPos=0,flashNeg=0,flashAge=0;
+
+function resize(){
+  W=canvas.width=wrap.clientWidth*devicePixelRatio;
+  H=canvas.height=wrap.clientHeight*devicePixelRatio;
+  CX=W/2;CY=H/2;
+}
+window.addEventListener('resize',resize);
+const ro=new ResizeObserver(resize);
+ro.observe(wrap);
+resize();
+
+function triggerFlay(bits,pos,neg){
+  flashBits=bits;flashPos=pos;flashNeg=neg;flashAge=1.0;
+}
+
+// Stars
+const STARS=Array.from({length:120},()=>({
+  x:Math.random(),y:Math.random(),r:Math.random()*1.0+0.2,
+  a:Math.random()*0.35+0.04
+}));
+
+function drawLayer(cx,cy,r,col,alpha,label,labelSub,pulse) {
+  // Outer glow
+  for(let i=3;i>=0;i--){
+    ctx.save();
+    ctx.globalAlpha=alpha*(0.5-i*0.12)*0.3*(1+pulse*0.5);
+    ctx.shadowBlur=40+i*20;ctx.shadowColor=col;
+    ctx.fillStyle=col;
+    ctx.beginPath();ctx.arc(cx,cy,r*(1+i*0.6),0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+  // Core
+  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+  g.addColorStop(0,'rgba(255,255,255,'+(alpha*0.8*(1+pulse*0.3))+')');
+  g.addColorStop(0.4,col.replace(')',','+(alpha*0.7*(1+pulse*0.2))+')').replace('rgb','rgba'));
+  g.addColorStop(1,col.replace(')',','+(alpha*0.1)+')').replace('rgb','rgba'));
+  ctx.save();
+  ctx.fillStyle=g;
+  ctx.shadowBlur=20*(1+pulse);ctx.shadowColor=col;
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+  // Label
+  ctx.save();
+  ctx.font=`700 ${Math.round(14*W/1000)+10}px "JetBrains Mono"`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=col;ctx.globalAlpha=0.85;
+  ctx.fillText(label,cx,cy-6);
+  ctx.font=`400 ${Math.round(9*W/1000)+7}px "JetBrains Mono"`;
+  ctx.fillStyle=col;ctx.globalAlpha=0.45;
+  ctx.fillText(labelSub,cx,cy+12);
+  ctx.restore();
+}
+
+function drawGap(cx,cy) {
+  const r=Math.min(CX,CY)*0.055*(1+Math.sin(t*3)*0.15);
+  const pulse=Math.sin(t*2.5)*0.3;
+  for(let i=2;i>=0;i--){
+    ctx.save();
+    ctx.globalAlpha=0.15+pulse*0.08;
+    ctx.shadowBlur=20+i*12;ctx.shadowColor='#d0d8e8';
+    ctx.fillStyle='rgba(208,216,232,'+(0.4-i*0.12)+')';
+    ctx.beginPath();ctx.arc(cx,cy,r*(1+i*0.4),0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+  ctx.save();
+  ctx.font=`700 ${Math.round(10*W/1000)+8}px "JetBrains Mono"`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(208,216,232,0.6)';
+  ctx.fillText('GAP',cx,cy-4);
+  ctx.font=`400 ${Math.round(8*W/1000)+6}px "JetBrains Mono"`;
+  ctx.fillStyle='rgba(208,216,232,0.35)';
+  ctx.fillText('0',cx,cy+10);
+  ctx.restore();
+}
+
+function drawObserver(x,y,r,col,label) {
+  ctx.save();
+  ctx.globalAlpha=0.7+Math.sin(t*1.8)*0.15;
+  ctx.shadowBlur=14;ctx.shadowColor=col;
+  ctx.strokeStyle=col;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle=col;ctx.globalAlpha=0.35;
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=0.6;
+  ctx.font=`400 ${Math.round(8*W/1000)+7}px "JetBrains Mono"`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=col;
+  ctx.fillText(label,x,y+r+14);
+  ctx.restore();
+}
+
+function drawConnectionLine(x1,y1,x2,y2,col,alpha,dashed) {
+  ctx.save();
+  ctx.strokeStyle=col;ctx.lineWidth=1;ctx.globalAlpha=alpha;
+  if(dashed)ctx.setLineDash([6,10]);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.setLineDash([]);ctx.restore();
+}
+
+function drawBitRing(cx,cy,bits) {
+  const R=Math.min(CX,CY)*0.82;
+  for(let i=0;i<8;i++){
+    const a=(i/8)*Math.PI*2-Math.PI/2;
+    const x=cx+Math.cos(a)*R, y=cy+Math.sin(a)*R;
+    const on=!!(bits&(1<<(7-i)));
+    ctx.save();
+    ctx.globalAlpha=on?0.8:0.2;
+    ctx.shadowBlur=on?10:0;ctx.shadowColor=on?'#c4a35a':'#1a2030';
+    ctx.fillStyle=on?'#c4a35a':'#1a2030';
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+    // Label
+    const lx=cx+Math.cos(a)*(R+18), ly=cy+Math.sin(a)*(R+18);
+    ctx.font=`400 ${Math.round(7*W/1000)+6}px "JetBrains Mono"`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=on?'#c4a35a44':'#1a2030';
+    ctx.fillText(DUALITIES[i][0].slice(0,3),lx,ly);
+    ctx.restore();
+  }
+}
+
+function render(ts) {
+  requestAnimationFrame(render);
+  if(!lastTs){lastTs=ts;return;}
+  const dt=Math.min((ts-lastTs)/1000,0.05);
+  lastTs=ts;t+=dt;
+  flashAge=Math.max(0,flashAge-dt*1.2);
+
+  ctx.fillStyle='#040608';
+  ctx.fillRect(0,0,W,H);
+
+  // Stars
+  STARS.forEach(s=>{
+    ctx.save();ctx.globalAlpha=s.a;ctx.fillStyle='#7a8090';
+    ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);ctx.fill();ctx.restore();
+  });
+
+  const sc=Math.min(CX,CY);
+  const posY=CY-sc*0.34, negY=CY+sc*0.34;
+  const posR=sc*0.18, negR=sc*0.16;
+
+  // Connection lines
+  drawConnectionLine(CX,posY+posR,CX,CY-sc*0.07,'rgba(90,196,170,.2)',0.4,false);
+  drawConnectionLine(CX,CY+sc*0.07,CX,negY-negR,'rgba(196,90,90,.2)',0.4,false);
+  drawConnectionLine(CX-sc*0.52,CY,CX,posY,'rgba(196,163,90,.12)',0.5,true);
+  drawConnectionLine(CX+sc*0.52,CY,CX,negY,'rgba(214,108,255,.12)',0.5,true);
+
+  // Bit ring
+  if(flashAge>0){
+    drawBitRing(CX,CY,flashBits);
+  }
+
+  // Observer nodes
+  const tA=t*0.4, oR=sc*0.06;
+  const ox1=CX+Math.cos(tA)*sc*0.52, oy1=CY+Math.sin(tA)*sc*0.22;
+  const ox2=CX+Math.cos(tA+Math.PI)*sc*0.52, oy2=CY+Math.sin(tA+Math.PI)*sc*0.22;
+  drawObserver(ox1,oy1,oR,'#8fc7ff','THEOROS');
+  drawObserver(ox2,oy2,oR,'#e8915a','ANTHROPOS');
+
+  // Diospora (+)
+  const posPulse=flashAge*flashPos/9;
+  drawLayer(CX,posY,posR,'rgb(90,196,170)',0.7+flashAge*0.3,'DIOSPORA','+ Positive',posPulse);
+
+  // Gap
+  drawGap(CX,CY);
+
+  // Skia (−)
+  const negPulse=flashAge*flashNeg/9;
+  drawLayer(CX,negY,negR,'rgb(196,90,90)',0.65+flashAge*0.25,'SKIA','− Shadow',negPulse);
+
+  // Flash overlay
+  if(flashAge>0.4){
+    ctx.save();
+    const g=ctx.createRadialGradient(CX,CY,0,CX,CY,sc*0.6);
+    g.addColorStop(0,'rgba(196,163,90,'+(flashAge-0.4)*0.3+')');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+}
+requestAnimationFrame(render);
+
+/* ── NOMOI list ──────────────────────────────────── */
+document.getElementById('nomorList').innerHTML=NOMOI.map(a=>{
+  const [key,...rest]=a.split(': ');
+  return `<div class="axiom-row"><span class="ax-key">${key}</span>${rest.join(': ').slice(0,50)}</div>`;
+}).join('');
+
+/* ── Sample chips ────────────────────────────────── */
+const chips=document.getElementById('sampleChips');
+SAMPLES.forEach(s=>{
+  const b=document.createElement('button');
+  b.className='chip';b.textContent=s.slice(0,36)+'…';b.title=s;
+  b.onclick=()=>{document.getElementById('flayInput').value=s;runFlay();};
+  chips.appendChild(b);
+});
+</script>
+</body>
+</html>
