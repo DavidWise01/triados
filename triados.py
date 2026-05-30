@@ -19,6 +19,15 @@ Convergence identity:
 Self-contained — no external files required. Generates all 256
 axioms from the 8 semantic dualities on first use.
 
+v1.1 additions (from AXIOM_MAPPER.md Tier 1):
+  • Canonical question format: "What is the {relation} that…"
+    (compatible with stoicheion_256.json canonical register)
+  • Weighted V2 classifier: per-axis confidence scores [0.0–1.0]
+    (0.0 = no lexical signal; 1.0 = fully determined)
+  • Hamming neighbors: all axioms within N bit-flips of the address,
+    annotated with which axis changes and the neighbor question
+  • 'id' field on every axiom: "Axiom_XX" for AXIOM_MAPPER compatibility
+
 Author:  ROOT0 / David Lee Wise / TriPod LLC
 License: CC-BY-ND-4.0
 """
@@ -35,7 +44,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field, asdict
 import cmath
 
-VERSION   = "1.0.0"
+VERSION   = "1.1.0"
 SIDE_B_DIR = Path("triados_side_b")
 SIDE_C_DIR = Path("triados_side_c")
 
@@ -45,14 +54,17 @@ SIDE_C_DIR = Path("triados_side_c")
 # ─────────────────────────────────────────────────────────────
 
 DUALITIES: List[Tuple[str, Tuple[str, str]]] = [
-    ("substrate", ("origin",    "mirror")),
-    ("function",  ("generation","constraint")),
-    ("relation",  ("self",      "other")),
-    ("scope",     ("internal",  "external")),
-    ("mode",      ("structure", "flow")),
-    ("time",      ("temporal",  "eternal")),
-    ("channel",   ("signal",    "noise")),
-    ("state",     ("open",      "closed")),
+    # Order is MSB→LSB (bit 7 → bit 0) matching stoicheion_256.json canonical register.
+    # Verified against FULL STICH.md: bits=128→time, 64→function, 32→relation,
+    # 16→substrate, 8→scope, 4→mode, 2→channel, 1→state.
+    ("time",      ("temporal",  "eternal")),    # bit 7 (MSB)
+    ("function",  ("generation","constraint")), # bit 6
+    ("relation",  ("self",      "other")),      # bit 5
+    ("substrate", ("origin",    "mirror")),     # bit 4
+    ("scope",     ("internal",  "external")),   # bit 3
+    ("mode",      ("structure", "flow")),       # bit 2
+    ("channel",   ("signal",    "noise")),      # bit 1
+    ("state",     ("open",      "closed")),     # bit 0 (LSB)
 ]
 
 FOUNDATIONS = ["Root0", "Ethos", "Logos", "Pathos", "Mythos"]
@@ -60,26 +72,32 @@ UNIVERSALS  = ["Vessel", "Animation", "Intellect", "Nourishment", "Life",
                "Perception", "Enforcement", "Record", "Tuning"]
 
 def _build_axiom(n: int) -> Dict[str, Any]:
-    """Generate a single axiom from its bit address."""
-    pos, neg = [], []
+    """Generate a single axiom from its bit address.
+
+    Uses the canonical STOICHEION question template:
+      'What is the {relation} that {function} from {substrate},
+       {scope} {mode}, {time} {channel}, {state}?'
+
+    Compatible with stoicheion_256.json (FULL STICH canonical register).
+    """
+    vals: Dict[str, str] = {}
     for i, (axis, (left, right)) in enumerate(DUALITIES):
-        if n & (1 << (7 - i)):
-            pos.append(right)
-            neg.append(left)
-        else:
-            pos.append(left)
-            neg.append(right)
-    q = (f"Does the system embody {', '.join(pos[:3])}"
-         + (f" while avoiding {', '.join(neg[:2])}" if neg else "") + "?")
+        vals[axis] = right if (n & (1 << (7 - i))) else left
+
+    q = (f"What is the {vals['relation']} that {vals['function']} from "
+         f"{vals['substrate']}, {vals['scope']} {vals['mode']}, "
+         f"{vals['time']} {vals['channel']}, {vals['state']}?")
+
     return {
+        "id":         f"Axiom_{n:02x}",
         "bits":       n,
         "hex":        f"0x{n:02X}",
+        "hex_short":  f"{n:02x}",
         "binary":     f"{n:08b}",
         "foundation": FOUNDATIONS[n % 5],
         "universal":  UNIVERSALS[n % 9],
         "question":   q,
-        "positive":   pos,
-        "negative":   neg,
+        **vals,          # all 8 axis values inline
     }
 
 # Generate the full 256-axiom register (lazy, cached)
@@ -138,36 +156,106 @@ def _count_hits(text: str, patterns: List[str]) -> int:
     return sum(1 for p in patterns if re.search(p, text))
 
 def _classify_axis(norm: str, axis: str, left: str, right: str
-                   ) -> Tuple[str, float]:
+                   ) -> Tuple[str, Dict[str, Any]]:
+    """Weighted V2 classifier — returns selected pole + full evidence dict.
+
+    When both poles have zero hits, scores default to 0.5 / 0.5 (uncertain).
+    confidence = |left_score - right_score| in [0.0, 1.0].
+    0.0 = no lexical evidence (uncertain); 1.0 = all hits on one side.
+    """
     lh = _count_hits(norm, RULES[axis][left])
     rh = _count_hits(norm, RULES[axis][right])
     total = lh + rh
-    selected = left if lh >= rh else right
-    confidence = 0.0 if total == 0 else max(lh, rh) / total
-    return selected, round(confidence, 4)
+    if total == 0:
+        ls, rs = 0.5, 0.5
+    else:
+        ls, rs = lh / total, rh / total
+    selected   = left if ls >= rs else right
+    confidence = round(abs(ls - rs), 4)
+    return selected, {
+        "left":         left,
+        "right":        right,
+        "left_score":   round(ls, 4),
+        "right_score":  round(rs, 4),
+        "selected":     selected,
+        "confidence":   confidence,
+    }
 
-def semantic_address(text: str) -> Dict[str, Any]:
-    """Map text to a 256-axiom bit address via the 8 semantic dualities."""
-    norm    = _normalize(text)
-    reg     = get_register()
-    bits    = 0
-    vector  = {}
-    confs   = []
+
+def hamming_neighbors(bits: int, max_distance: int = 1) -> List[Dict[str, Any]]:
+    """Return all 256-register entries within `max_distance` Hamming bits.
+
+    Sorted by distance then address. At distance=1 there are always exactly
+    8 neighbors (one per duality axis). At distance=2 there are 28.
+
+    Each neighbor entry includes:
+      - 'address':  the neighbor bit address
+      - 'distance': Hamming distance from `bits`
+      - 'axis':     which axis differs (only for distance=1)
+      - 'id':       canonical axiom ID string
+    """
+    reg = get_register()
+    out: List[Dict[str, Any]] = []
+    for other in range(256):
+        diff = bits ^ other
+        dist = bin(diff).count("1")
+        if 0 < dist <= max_distance:
+            # Find which axes differ (meaningful for dist=1)
+            axes = []
+            for i, (axis, _) in enumerate(DUALITIES):
+                if diff & (1 << (7 - i)):
+                    axes.append(axis)
+            out.append({
+                "address":  other,
+                "id":       reg[other]["id"],
+                "hex":      reg[other]["hex"],
+                "distance": dist,
+                "axes":     axes,
+                "question": reg[other]["question"],
+            })
+    out.sort(key=lambda x: (x["distance"], x["address"]))
+    return out
+
+def semantic_address(text: str, neighbor_distance: int = 1) -> Dict[str, Any]:
+    """Map text to a 256-axiom bit address via the 8 semantic dualities.
+
+    Uses the weighted V2 classifier per axis. Overall confidence is the
+    mean per-axis confidence; 0.0 = no lexical signal; 1.0 = fully determined.
+
+    Args:
+        text: any string to classify.
+        neighbor_distance: Hamming radius for neighbor lookup (default 1).
+    """
+    norm  = _normalize(text)
+    reg   = get_register()
+    bits  = 0
+    vector:   Dict[str, str]          = {}
+    evidence: Dict[str, Dict]         = {}
+    confs: List[float]                = []
+
     for i, (axis, (left, right)) in enumerate(DUALITIES):
-        sel, conf = _classify_axis(norm, axis, left, right)
-        vector[axis] = sel
-        confs.append(conf)
+        sel, info = _classify_axis(norm, axis, left, right)
+        vector[axis]   = sel
+        evidence[axis] = info
+        confs.append(info["confidence"])
         if sel == right:
             bits |= (1 << (7 - i))
-    axiom = reg[bits]
+
+    axiom     = reg[bits]
+    neighbors = hamming_neighbors(bits, max_distance=neighbor_distance)
+
     return {
-        "text":       text,
-        "bits":       bits,
-        "hex":        axiom["hex"],
-        "binary":     axiom["binary"],
-        "vector":     vector,
-        "axiom":      axiom,
-        "confidence": round(sum(confs) / len(confs), 4),
+        "text":             text,
+        "bits":             bits,
+        "hex":              axiom["hex"],
+        "id":               axiom["id"],
+        "binary":           axiom["binary"],
+        "vector":           vector,
+        "evidence":         evidence,
+        "axiom":            axiom,
+        "confidence":       round(sum(confs) / len(confs), 4),
+        "neighbors":        neighbors,
+        "neighbor_count":   len(neighbors),
     }
 
 
@@ -430,15 +518,16 @@ class Triados:
         return result
 
     def quick(self, text: str) -> str:
-        """Single-line summary."""
+        """Single-line summary including neighbor count."""
         r = self.flay(text, log=False)
         s = r["semantic"]
         p = r["diospora"]
         n = r["skia"]
-        return (f"{s['hex']} | {s['vector']} | "
-                f"DIOSPORA: {p['nomos']} truth={p['truth_level']} | "
-                f"SKIA: {n['nomos']} | "
-                f"confidence={s['confidence']}")
+        nb_axes = ", ".join(nb["axes"][0] for nb in s["neighbors"][:3]) if s["neighbors"] else "—"
+        return (f"{s['hex']} ({s['id']}) conf={s['confidence']} | "
+                f"D: {p['nomos']} truth={p['truth_level']} | "
+                f"S: {n['nomos']} | "
+                f"neighbors@1: {s['neighbor_count']} [{nb_axes}…]")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -505,19 +594,28 @@ def _print_flay(r: Dict[str, Any]):
     s, p, g, n = r["semantic"], r["diospora"], r["gap"], r["skia"]
     w, conv     = r["theoros"], r["henosis"]
     print(f"\n{'='*62}")
-    print(f"  TRIADOS FLAY · {s['hex']} · confidence {s['confidence']}")
+    print(f"  TRIADOS FLAY · {s['hex']} · {s['id']} · conf {s['confidence']}")
     print(f"{'='*62}")
     print(f"  Target:    {r['target'][:58]}")
     print(f"\n  [DIOSPORA +]")
     print(f"    Nomos:     {p['nomos']} — {p['nomos_text'][:48]}")
     print(f"    Universal: {p['universal']} · truth level {p['truth_level']}")
-    print(f"    Axiom:     {p['sub_axiom'][:60]}")
+    print(f"    Question:  {p['sub_axiom'][:60]}")
     print(f"\n  [GAP 0]")
     print(f"    Hash:      {g['hash']}")
     print(f"    State:     {g['verdict']}")
     print(f"\n  [SKIA -]")
     print(f"    Nomos:     {n['nomos']} — {n['nomos_text'][:48]}")
     print(f"    Universal: {n['universal']} · entropy level {n['truth_level']}")
+    print(f"\n  [SEMANTIC EVIDENCE]")
+    for axis, ev in s.get("evidence", {}).items():
+        bar = "#" * int(ev["confidence"] * 10) + "·" * (10 - int(ev["confidence"] * 10))
+        print(f"    {axis:<12} {ev['selected']:<12} [{bar}] {ev['confidence']:.2f}")
+    print(f"\n  [HAMMING NEIGHBORS — distance 1]")
+    for nb in s.get("neighbors", [])[:4]:
+        print(f"    {nb['hex']} {nb['id']} ({', '.join(nb['axes'])}) — {nb['question'][:44]}")
+    if len(s.get("neighbors", [])) > 4:
+        print(f"    … and {len(s['neighbors'])-4} more")
     print(f"\n  [THEOROS · Internal Witness]")
     print(f"    Alignment: {w['alignment']}")
     print(f"    Synthesis: {w['synthesis']}")
